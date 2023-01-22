@@ -27,7 +27,7 @@ static LFBFState state = {
     .active = false,
     .data = {0},
     .data_length = 16,
-    .data_current_byte = 0,
+    .data_current_byte = -1,
     .dict = NULL,
     .protocol_id = 0,
     .worker = NULL,
@@ -58,17 +58,17 @@ static void app_draw_callback(Canvas* canvas, void* ctx) {
         hex_byte[0] = HEXCHAR(state.data[i] >> 4);
         hex_byte[1] = HEXCHAR(state.data[i] & 0xf);
         hex_byte[2] = '\0';
-        canvas_draw_str(canvas, 12*i, 17, hex_byte);
+        canvas_draw_str(canvas, 12*i, 18, hex_byte);
     }
     if (state.data_current_byte != -1) {
-        canvas_draw_str(canvas, 12 * state.data_current_byte, 17, "__");
+        canvas_draw_str(canvas, 12 * state.data_current_byte, 18, "__");
     }
 
     canvas_set_font(canvas, FontSecondary);
     FuriString* render_data;
     render_data = furi_string_alloc();
     protocol_dict_render_data(state.dict, render_data, state.protocol_id);
-    elements_multiline_text(canvas, 0, 27, furi_string_get_cstr(render_data));
+    elements_multiline_text(canvas, 0, 29, furi_string_get_cstr(render_data));
     furi_string_free(render_data);
 }
 
