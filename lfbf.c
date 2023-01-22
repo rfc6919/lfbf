@@ -79,6 +79,23 @@ static void app_input_callback(InputEvent* input_event, void* ctx) {
     furi_message_queue_put(event_queue, input_event, FuriWaitForever);
 }
 
+void lfbf_emulation_start() {
+    state.worker = lfrfid_worker_alloc(state.dict);
+    lfrfid_worker_start_thread(state.worker);
+    lfrfid_worker_emulate_start(state.worker, state.protocol_id);
+    state.active = true;
+}
+
+void lfbf_emulation_stop() {
+    if (state.active) {
+        lfrfid_worker_stop(state.worker);
+        lfrfid_worker_stop_thread(state.worker);
+        lfrfid_worker_free(state.worker);
+        state.worker = NULL;
+    }
+    state.active = false;
+}
+
 int32_t lfbf_main(void* p) {
     UNUSED(p);
     FuriMessageQueue* event_queue = furi_message_queue_alloc(8, sizeof(InputEvent));
@@ -104,6 +121,7 @@ int32_t lfbf_main(void* p) {
     while(running) {
         if(furi_message_queue_get(event_queue, &event, 100) == FuriStatusOk) {
             if((event.type == InputTypePress) || (event.type == InputTypeRepeat)) {
+                bool initial_state;
                 switch(event.key) {
                 case InputKeyLeft:
                     state.data_current_byte -= 1;
@@ -118,38 +136,44 @@ int32_t lfbf_main(void* p) {
                     }
                     break;
                 case InputKeyUp:
+                    initial_state = state.active;
+                    lfbf_emulation_stop();
                     if (state.data_current_byte >= 0) {
                         state.data[state.data_current_byte] += 1;
                         protocol_dict_set_data(state.dict, state.protocol_id, state.data, state.data_length);
+                        if (initial_state) {
+                            lfbf_emulation_start();
+                        }
                         FURI_LOG_I(TAG, "set data length %u", state.data_length);
                     } else {
+                        lfbf_emulation_stop();
                         state.protocol_id = (state.protocol_id + LFRFIDProtocolMax - 1) % LFRFIDProtocolMax;
                         state.data_length = protocol_dict_get_data_size(state.dict, state.protocol_id);
                         protocol_dict_get_data(state.dict, state.protocol_id, state.data, state.data_length);
                     }
                     break;
                 case InputKeyDown:
+                    initial_state = state.active;
+                    lfbf_emulation_stop();
                     if (state.data_current_byte >= 0) {
                         state.data[state.data_current_byte] -= 1;
                         protocol_dict_set_data(state.dict, state.protocol_id, state.data, state.data_length);
+                        if (initial_state) {
+                            lfbf_emulation_start();
+                        }
                         FURI_LOG_I(TAG, "set data length %u", state.data_length);
                     } else {
+                        lfbf_emulation_stop();
                         state.protocol_id = (state.protocol_id + 1) % LFRFIDProtocolMax;
                         state.data_length = protocol_dict_get_data_size(state.dict, state.protocol_id);
                         protocol_dict_get_data(state.dict, state.protocol_id, state.data, state.data_length);
                     }
                     break;
                 case InputKeyOk:
-                    state.active = ! state.active;
                     if (state.active) {
-                        state.worker = lfrfid_worker_alloc(state.dict);
-                        lfrfid_worker_start_thread(state.worker);
-                        lfrfid_worker_emulate_start(state.worker, state.protocol_id);
+                        lfbf_emulation_stop();
                     } else {
-                        lfrfid_worker_stop(state.worker);
-                        lfrfid_worker_stop_thread(state.worker);
-                        lfrfid_worker_free(state.worker);
-                        state.worker = NULL;
+                        lfbf_emulation_start();
                     }
                     break;
                 default:
@@ -162,6 +186,7 @@ int32_t lfbf_main(void* p) {
     }
 
     // tear down LFBF
+    lfbf_emulation_stop();
     protocol_dict_free(state.dict);
 
     view_port_enabled_set(view_port, false);
