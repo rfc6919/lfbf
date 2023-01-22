@@ -8,6 +8,7 @@
 
 #include <toolbox/protocols/protocol_dict.h>
 #include <lfrfid/protocols/lfrfid_protocols.h>
+#include <lib/lfrfid/lfrfid_worker.h>
 
 #define TAG "lfbf"
 #define HEXCHAR(i) ( (i) < 10 ? '0' + (i) : 'A' + (i) - 10 )
@@ -19,6 +20,7 @@ typedef struct {
     int8_t data_current_byte; // which byte (little endian) we're currently editing, -1 == protocol
     ProtocolDict* dict;
     ProtocolId protocol_id;
+    LFRFIDWorker* worker;
 } LFBFState;
 
 static LFBFState state = {
@@ -28,6 +30,7 @@ static LFBFState state = {
     .data_current_byte = 0,
     .dict = NULL,
     .protocol_id = 0,
+    .worker = NULL,
 };
 
 // Screen is 128x64 px
@@ -138,6 +141,16 @@ int32_t lfbf_main(void* p) {
                     break;
                 case InputKeyOk:
                     state.active = ! state.active;
+                    if (state.active) {
+                        state.worker = lfrfid_worker_alloc(state.dict);
+                        lfrfid_worker_start_thread(state.worker);
+                        lfrfid_worker_emulate_start(state.worker, state.protocol_id);
+                    } else {
+                        lfrfid_worker_stop(state.worker);
+                        lfrfid_worker_stop_thread(state.worker);
+                        lfrfid_worker_free(state.worker);
+                        state.worker = NULL;
+                    }
                     break;
                 default:
                     running = false;
@@ -147,6 +160,9 @@ int32_t lfbf_main(void* p) {
         }
         view_port_update(view_port);
     }
+
+    // tear down LFBF
+    protocol_dict_free(state.dict);
 
     view_port_enabled_set(view_port, false);
     gui_remove_view_port(gui, view_port);
