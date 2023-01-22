@@ -4,18 +4,44 @@
 #include <gui/gui.h>
 #include <input/input.h>
 
-typedef struct {
-    uint8_t x, y;
-} ImagePosition;
+#define HEXCHAR(i) ( (i) >= 10 ? 'A' + (i) - 10 : '0' + (i) )
+#define PROTOCOLNAME ("Protocol")
 
-static ImagePosition image_position = {.x = 0, .y = 0};
+typedef struct {
+    bool active;
+    uint8_t data[10]; // max length we can print on the screen in hex
+    uint8_t data_length; // length in use for the current protocol
+    int8_t data_current_byte; // which byte (little endian) we're currently editing, -1 == protocol
+} LFBFState;
+
+static LFBFState state = { .active = false, .data = "\0\0\0\0\0\0\0\0\0\0", .data_length = 10, .data_current_byte = 0 };
 
 // Screen is 128x64 px
 static void app_draw_callback(Canvas* canvas, void* ctx) {
     UNUSED(ctx);
 
     canvas_clear(canvas);
-    canvas_draw_str(canvas, image_position.x % 128, image_position.y % 64, "QWERTY");
+    canvas_set_font(canvas, FontKeyboard);
+
+    canvas_draw_str(canvas, 0, 7, PROTOCOLNAME);
+    if (state.data_current_byte == -1) {
+        for (uint8_t i = 0; i < strlen(PROTOCOLNAME); i++) {
+            canvas_draw_str(canvas, 6 *  i, 7, "_");
+        }
+    }
+
+    for (uint8_t i = 0; i < state.data_length; i++) {
+        char byte[3] = "  ";
+        byte[0] = HEXCHAR(state.data[i] >> 4);
+        byte[1] = HEXCHAR(state.data[i] & 0xf);
+        canvas_draw_str(canvas, 12*i, 17, byte);
+    }
+    if (state.data_current_byte != -1) {
+        canvas_draw_str(canvas, 12 * state.data_current_byte, 17, "__");
+    }
+    if (state.active) {
+        canvas_draw_str(canvas, 0, 64, "ACTIVE");
+    }
 }
 
 static void app_input_callback(InputEvent* input_event, void* ctx) {
@@ -46,16 +72,29 @@ int32_t lfbf_main(void* p) {
             if((event.type == InputTypePress) || (event.type == InputTypeRepeat)) {
                 switch(event.key) {
                 case InputKeyLeft:
-                    image_position.x -= 2;
+                    state.data_current_byte -= 1;
+                    if (state.data_current_byte == -2) {
+                        state.data_current_byte = state.data_length - 1;
+                    }
                     break;
                 case InputKeyRight:
-                    image_position.x += 2;
+                    state.data_current_byte += 1;
+                    if (state.data_current_byte == state.data_length) {
+                        state.data_current_byte = -1;
+                    }
                     break;
                 case InputKeyUp:
-                    image_position.y -= 2;
+                    if (state.data_current_byte >= 0) {
+                        state.data[state.data_current_byte] += 1;
+                    }
                     break;
                 case InputKeyDown:
-                    image_position.y += 2;
+                    if (state.data_current_byte >= 0) {
+                        state.data[state.data_current_byte] -= 1;
+                    }
+                    break;
+                case InputKeyOk:
+                    state.active = ! state.active;
                     break;
                 default:
                     running = false;
