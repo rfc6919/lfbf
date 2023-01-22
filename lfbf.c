@@ -4,44 +4,69 @@
 #include <gui/gui.h>
 #include <input/input.h>
 
-#define HEXCHAR(i) ( (i) >= 10 ? 'A' + (i) - 10 : '0' + (i) )
-#define PROTOCOLNAME ("Protocol")
+#include <gui/elements.h>
+
+#include <toolbox/protocols/protocol_dict.h>
+#include <lfrfid/protocols/lfrfid_protocols.h>
+
+#define TAG "lfbf"
+#define HEXCHAR(i) ( (i) < 10 ? '0' + (i) : 'A' + (i) - 10 )
 
 typedef struct {
     bool active;
-    uint8_t data[10]; // max length we can print on the screen in hex
+    uint8_t data[16]; // but we can only print 10 :(
     uint8_t data_length; // length in use for the current protocol
     int8_t data_current_byte; // which byte (little endian) we're currently editing, -1 == protocol
+    ProtocolDict* dict;
+    ProtocolId protocol_id;
 } LFBFState;
 
-static LFBFState state = { .active = false, .data = "\0\0\0\0\0\0\0\0\0\0", .data_length = 10, .data_current_byte = 0 };
+static LFBFState state = {
+    .active = false,
+    .data = {0},
+    .data_length = 16,
+    .data_current_byte = 0,
+    .dict = NULL,
+    .protocol_id = 0,
+};
 
 // Screen is 128x64 px
 static void app_draw_callback(Canvas* canvas, void* ctx) {
     UNUSED(ctx);
+    const char *protocol_name;
 
     canvas_clear(canvas);
     canvas_set_font(canvas, FontKeyboard);
 
-    canvas_draw_str(canvas, 0, 7, PROTOCOLNAME);
+    protocol_name = protocol_dict_get_name(state.dict, state.protocol_id);
+    canvas_draw_str(canvas, 0, 7, protocol_name);
     if (state.data_current_byte == -1) {
-        for (uint8_t i = 0; i < strlen(PROTOCOLNAME); i++) {
+        for (uint8_t i = 0; i < strlen(protocol_name); i++) {
             canvas_draw_str(canvas, 6 *  i, 7, "_");
         }
     }
 
+    if (state.active) {
+        canvas_draw_str(canvas, 90, 7, "ACTIVE");
+    }
+
     for (uint8_t i = 0; i < state.data_length; i++) {
-        char byte[3] = "  ";
-        byte[0] = HEXCHAR(state.data[i] >> 4);
-        byte[1] = HEXCHAR(state.data[i] & 0xf);
-        canvas_draw_str(canvas, 12*i, 17, byte);
+        char hex_byte[3];
+        hex_byte[0] = HEXCHAR(state.data[i] >> 4);
+        hex_byte[1] = HEXCHAR(state.data[i] & 0xf);
+        hex_byte[2] = '\0';
+        canvas_draw_str(canvas, 12*i, 17, hex_byte);
     }
     if (state.data_current_byte != -1) {
         canvas_draw_str(canvas, 12 * state.data_current_byte, 17, "__");
     }
-    if (state.active) {
-        canvas_draw_str(canvas, 0, 64, "ACTIVE");
-    }
+
+    //canvas_set_font(canvas, FontSecondary);
+    //FuriString* render_data;
+    //render_data = furi_string_alloc();
+    //protocol_dict_render_data(state.dict, render_data, state.protocol_id);
+    //elements_multiline_text(canvas, 0, 27, furi_string_get_cstr(render_data));
+    //furi_string_free(render_data);
 }
 
 static void app_input_callback(InputEvent* input_event, void* ctx) {
@@ -63,6 +88,14 @@ int32_t lfbf_main(void* p) {
     // Register view port in GUI
     Gui* gui = furi_record_open(RECORD_GUI);
     gui_add_view_port(gui, view_port, GuiLayerFullscreen);
+
+    // Set up LFBF
+    state.dict = protocol_dict_alloc(lfrfid_protocols, LFRFIDProtocolMax);
+    state.protocol_id = 0;
+    state.data_length = protocol_dict_get_data_size(state.dict, state.protocol_id);
+    for (uint8_t i = 0; i < state.data_length; i++) {
+        state.data[i] = 0;
+    }
 
     InputEvent event;
 
@@ -86,11 +119,23 @@ int32_t lfbf_main(void* p) {
                 case InputKeyUp:
                     if (state.data_current_byte >= 0) {
                         state.data[state.data_current_byte] += 1;
+                    } else {
+                        state.protocol_id = (state.protocol_id + LFRFIDProtocolMax - 1) % LFRFIDProtocolMax;
+                        state.data_length = protocol_dict_get_data_size(state.dict, state.protocol_id);
+                        for (uint8_t i = 0; i < state.data_length; i++) {
+                            state.data[i] = 0;
+                        }
                     }
                     break;
                 case InputKeyDown:
                     if (state.data_current_byte >= 0) {
                         state.data[state.data_current_byte] -= 1;
+                    } else {
+                        state.protocol_id = (state.protocol_id + 1) % LFRFIDProtocolMax;
+                        state.data_length = protocol_dict_get_data_size(state.dict, state.protocol_id);
+                        for (uint8_t i = 0; i < state.data_length; i++) {
+                            state.data[i] = 0;
+                        }
                     }
                     break;
                 case InputKeyOk:
