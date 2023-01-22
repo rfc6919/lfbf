@@ -93,9 +93,7 @@ int32_t lfbf_main(void* p) {
     state.dict = protocol_dict_alloc(lfrfid_protocols, LFRFIDProtocolMax);
     state.protocol_id = 0;
     state.data_length = protocol_dict_get_data_size(state.dict, state.protocol_id);
-    for (uint8_t i = 0; i < state.data_length; i++) {
-        state.data[i] = 0;
-    }
+    protocol_dict_get_data(state.dict, state.protocol_id, state.data, state.data_length);
 
     InputEvent event;
 
@@ -124,9 +122,7 @@ int32_t lfbf_main(void* p) {
                     } else {
                         state.protocol_id = (state.protocol_id + LFRFIDProtocolMax - 1) % LFRFIDProtocolMax;
                         state.data_length = protocol_dict_get_data_size(state.dict, state.protocol_id);
-                        for (uint8_t i = 0; i < state.data_length; i++) {
-                            state.data[i] = 0;
-                        }
+                        protocol_dict_get_data(state.dict, state.protocol_id, state.data, state.data_length);
                     }
                     break;
                 case InputKeyDown:
@@ -137,9 +133,7 @@ int32_t lfbf_main(void* p) {
                     } else {
                         state.protocol_id = (state.protocol_id + 1) % LFRFIDProtocolMax;
                         state.data_length = protocol_dict_get_data_size(state.dict, state.protocol_id);
-                        for (uint8_t i = 0; i < state.data_length; i++) {
-                            state.data[i] = 0;
-                        }
+                        protocol_dict_get_data(state.dict, state.protocol_id, state.data, state.data_length);
                     }
                     break;
                 case InputKeyOk:
