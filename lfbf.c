@@ -61,12 +61,12 @@ static void app_draw_callback(Canvas* canvas, void* ctx) {
         canvas_draw_str(canvas, 12 * state.data_current_byte, 17, "__");
     }
 
-    //canvas_set_font(canvas, FontSecondary);
-    //FuriString* render_data;
-    //render_data = furi_string_alloc();
-    //protocol_dict_render_data(state.dict, render_data, state.protocol_id);
-    //elements_multiline_text(canvas, 0, 27, furi_string_get_cstr(render_data));
-    //furi_string_free(render_data);
+    canvas_set_font(canvas, FontSecondary);
+    FuriString* render_data;
+    render_data = furi_string_alloc();
+    protocol_dict_render_data(state.dict, render_data, state.protocol_id);
+    elements_multiline_text(canvas, 0, 27, furi_string_get_cstr(render_data));
+    furi_string_free(render_data);
 }
 
 static void app_input_callback(InputEvent* input_event, void* ctx) {
@@ -119,6 +119,8 @@ int32_t lfbf_main(void* p) {
                 case InputKeyUp:
                     if (state.data_current_byte >= 0) {
                         state.data[state.data_current_byte] += 1;
+                        protocol_dict_set_data(state.dict, state.protocol_id, state.data, state.data_length);
+                        FURI_LOG_I(TAG, "set data length %u", state.data_length);
                     } else {
                         state.protocol_id = (state.protocol_id + LFRFIDProtocolMax - 1) % LFRFIDProtocolMax;
                         state.data_length = protocol_dict_get_data_size(state.dict, state.protocol_id);
@@ -130,6 +132,8 @@ int32_t lfbf_main(void* p) {
                 case InputKeyDown:
                     if (state.data_current_byte >= 0) {
                         state.data[state.data_current_byte] -= 1;
+                        protocol_dict_set_data(state.dict, state.protocol_id, state.data, state.data_length);
+                        FURI_LOG_I(TAG, "set data length %u", state.data_length);
                     } else {
                         state.protocol_id = (state.protocol_id + 1) % LFRFIDProtocolMax;
                         state.data_length = protocol_dict_get_data_size(state.dict, state.protocol_id);
